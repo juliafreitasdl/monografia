@@ -1,30 +1,24 @@
-rm(list=ls(all=TRUE))
-############ Bases, recortes e preparação para analise descritiva
-
 #PNADC 2019.1: base, deflator e transformando a variavel de ocupacao em numero
-microdados_pnadc2019.1 <- read_pnadc("PNADC_012019.txt", 
-                          "input_PNADC_trimestral.txt", 
-                          vars = c("UPA","V1028","Estrato","UF","V2007",
-                                   "V2009","V2010","VD4002",
-                                   "VD4016","V4010","VD3005",
-                                   "V4029","V4032","V1022", "V1023"))
+microdados_pnadc2019.1 <- PNADcIBGE::read_pnadc("PNADC_012019.txt", 
+                                                "input_PNADC_trimestral.txt", 
+                                                vars = c("UPA","V1028","Estrato","UF","V2007",
+                                                         "V2009","V2010","VD4002",
+                                                         "VD4016","V4010","VD3005",
+                                                         "V4029","V4032","V1022", "V1023"))
 
-pnadc_2019.1 <- pnadc_deflator(microdados_pnadc2019.1, deflator.file="deflator_PNADC_2022_trimestral_101112.xls")
-
+pnadc_2019.1 <- PNADcIBGE::pnadc_deflator(microdados_pnadc2019.1, deflator.file="deflator_PNADC_2022_trimestral_101112.xls")
 pnadc_2019.1$VD4016_def <- pnadc_2019.1$VD4016*pnadc_2019.1$Habitual
-pnadc_2019.1$V4010 <- as.numeric(pnadc_2019.1$V4010)
+pnadc_2019.1 <- dplyr::mutate_all(pnadc_2019.1, as.numeric)
 
 #cbo, cod, fazendo equivalencia entre cbo e cod e por fim, adicionando as escolaridades minimas e max.
 equivalencia_cbo_cod <- readxl::read_excel("equivalencia_cbo_cod.xlsx")
 escolaridade_cbo <- readxl::read_excel("escolaridade_requerida_cbo.xlsx")
 
-pnadc_equivalente_2019.1 <- dplyr::full_join(pnadc_2019.1, equivalencia_cbo_cod, by ="V4010")
-
-pnadc_2019.1_escolaridade <- dplyr::full_join(pnadc_equivalente_2019.1, escolaridade_cbo, by ="cbo")
+pnadc_2019.1_escolaridade <- full_join(pnadc_2019.1, equivalencia_cbo_cod, by = "V4010") %>%
+  full_join(escolaridade_cbo, by = "cbo")
 
 #recortes na base: idade (18-60), retirada de dirigentes e legisladores
-pnadc_com_idade <- subset(pnadc_2019.1_escolaridade, V2009 %in% c(18:60))
-pnadc_sem_pesos <- subset(pnadc_com_idade, V4010 %in% c(1120:9629)| is.na(V4010))
+pnadc_sem_pesos <- subset(pnadc_2019.1_escolaridade, V2009 %in% 18:60 & (V4010 %in% 1120:9629 | is.na(V4010)))
 
 #adicionando os pesos amostrais a base
 pnadc_2019.1_final <- pnadc_sem_pesos %>% srvyr::as_survey_design(ids = UPA, 
@@ -32,12 +26,9 @@ pnadc_2019.1_final <- pnadc_sem_pesos %>% srvyr::as_survey_design(ids = UPA,
                                                        weights = V1028, 
                                                        nest = TRUE)
 
-# variavel de ocupação e educação em numero
-pnadc_2019.1_final$variables$VD3005 <- as.numeric(pnadc_2019.1_final$variables$VD3005)
-pnadc_2019.1_final$variables$VD4002 <- as.numeric(pnadc_2019.1_final$variables$VD4002)
-
 #criando colunas: se o trabalhador é sobre-educado(1) ou não (0), e sobre a região que reside ( 1 - Norte; 
 # 2 - Nordeste; 3 - Sudeste; 4 - Sul; 5 - Centro-Oeste)
+
 pnadc_2019.1_final <- pnadc_2019.1_final %>% mutate (classificacao = case_when(
                                                      VD3005 > Maximo ~ 1,
                                                      VD3005 < Minimo ~ 0),
