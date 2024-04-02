@@ -20,7 +20,7 @@ pnadc_2019.1_escolaridade <- full_join(pnadc_2019.1, equivalencia_cbo_cod, by = 
 # Recortes na base: idade (18-60), retirada de dirigentes e legisladores
 pnadc_sem_pesos <- subset(pnadc_2019.1_escolaridade, V2009 %in% 18:60 & (V4010 %in% 1120:9629 | is.na(V4010)))
 
-## Criando colunas
+## Dummies
 pnadc_estimacao_2019.1 <- pnadc_sem_pesos %>% mutate(classificacao = ifelse(VD3005 > Maximo, 1, 0),
                                                      mulher = ifelse(V2007 == 2, 1,0),
                                                      negro = ifelse(V2010 %in% c(2,4), 1, 0),
@@ -29,28 +29,21 @@ pnadc_estimacao_2019.1 <- pnadc_sem_pesos %>% mutate(classificacao = ifelse(VD30
                                                      carteira = ifelse(V4029 == 1,1,0),
                                                      urbano = ifelse(V1022 == 1,1,0),
                                                      capital = ifelse(V1023 == 1,1,0))
-##Estimações e quantis
+##Estimações e quintos
 
-# Definir o número de quintis desejados
 num_quintis <- 5
 
-# Dividir a base de dados em quintis de rendimento
 data_quintis <- pnadc_estimacao_2019.1 %>%
   mutate(rend_quintil = ntile(VD4016_def, num_quintis))
 
-# Inicializar uma lista vazia para armazenar os resultados
 resultados <- list()
 
-# Loop sobre os quintis de rendimento
-for (i in 1:num_quintis) {
-  # Selecionar a amostra correspondente ao quintil atual
+# Loop sobre os quintos de rendimento
+for (i in 1:num_quintis) 
   amostra <- subset(data_quintis, rend_quintil == i) 
-  # Executar o probit para a amostra atual
-  modelo <- glm(classificacao ~ mulher + negro + escolaridade + idade + carteira + 
+  model <- glm(classificacao ~ mulher + negro + escolaridade + idade + carteira + 
                   urbano + capital, family = binomial(link = "probit"), data = pnadc_estimacao_2019.1)
-  summary(modelo)  
-  # Calcular as marginais do modelo probit bivariado
+  summary(model)  
   marginais <- mfx::probitmfx(modelo, atmean = FALSE, data = amostra)
-  # Armazenar os resultados das marginais
   resultados[[i]] <- marginais
 }
